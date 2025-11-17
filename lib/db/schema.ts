@@ -87,8 +87,15 @@ export const figmaFrames = pgTable('figma_frames', {
   height: integer('height').notNull(),
   thumbnail: text('thumbnail'),
   backgroundColor: varchar('background_color', { length: 50 }),
+  // Device classification
+  deviceType: varchar('device_type', { length: 20 }), // mobile, tablet, desktop, other
+  deviceClassificationConfidence: varchar('device_classification_confidence', { length: 20 }), // high, medium, low
+  deviceClassificationReason: text('device_classification_reason'),
   // Parsed design data
   parsedData: jsonb('parsed_data'), // Stores all frame properties, children, styles
+  analysisData: jsonb('analysis_data'), // Stores deep analysis results
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
 })
 
 // Flow connections table - manual connections between frames
@@ -108,6 +115,42 @@ export const exports = pgTable('exports', {
   format: varchar('format', { length: 20 }).notNull(), // 'markdown', 'json', etc.
   content: text('content').notNull(),
   sizeBytes: integer('size_bytes').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+// Components table - Figma component definitions
+export const components = pgTable('components', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  figmaComponentId: varchar('figma_component_id', { length: 50 }).notNull(),
+  figmaComponentKey: varchar('figma_component_key', { length: 50 }).notNull(),
+  name: text('name').notNull(),
+  description: text('description'),
+  type: varchar('type', { length: 20 }).notNull(), // component, variant
+  variantGroupId: varchar('variant_group_id', { length: 50 }),
+  variantProperties: jsonb('variant_properties'),
+  width: integer('width').notNull(),
+  height: integer('height').notNull(),
+  containingPage: text('containing_page'),
+  instanceCount: integer('instance_count').default(0),
+  thumbnailUrl: text('thumbnail_url'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+})
+
+// Component instances table - tracks component usage
+export const componentInstances = pgTable('component_instances', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  instanceId: varchar('instance_id', { length: 50 }).notNull(),
+  componentId: varchar('component_id', { length: 50 }).notNull(),
+  componentKey: varchar('component_key', { length: 50 }).notNull(),
+  frameId: varchar('frame_id', { length: 50 }).notNull(),
+  name: text('name').notNull(),
+  x: integer('x').notNull(),
+  y: integer('y').notNull(),
+  overrides: jsonb('overrides'),
+  scaleFactor: integer('scale_factor'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 })
 
@@ -148,6 +191,8 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   pages: many(figmaPages),
   connections: many(flowConnections),
   exports: many(exports),
+  components: many(components),
+  componentInstances: many(componentInstances),
 }))
 
 export const figmaPagesRelations = relations(figmaPages, ({ one, many }) => ({
@@ -191,6 +236,20 @@ export const exportsRelations = relations(exports, ({ one }) => ({
   }),
 }))
 
+export const componentsRelations = relations(components, ({ one }) => ({
+  project: one(projects, {
+    fields: [components.projectId],
+    references: [projects.id],
+  }),
+}))
+
+export const componentInstancesRelations = relations(componentInstances, ({ one }) => ({
+  project: one(projects, {
+    fields: [componentInstances.projectId],
+    references: [projects.id],
+  }),
+}))
+
 // Types
 export type User = typeof users.$inferSelect
 export type NewUser = typeof users.$inferInsert
@@ -218,3 +277,9 @@ export type NewFlowConnection = typeof flowConnections.$inferInsert
 
 export type Export = typeof exports.$inferSelect
 export type NewExport = typeof exports.$inferInsert
+
+export type Component = typeof components.$inferSelect
+export type NewComponent = typeof components.$inferInsert
+
+export type ComponentInstance = typeof componentInstances.$inferSelect
+export type NewComponentInstance = typeof componentInstances.$inferInsert
