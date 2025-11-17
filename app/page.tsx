@@ -6,7 +6,7 @@ export default function Home() {
           Figma Flow Mapper
         </h1>
         <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-          Design System Context Tool for LLMs - Bridge between Figma designs and AI-assisted development
+          Design System Context Tool for LLMs! - Bridge between Figma designs and AI-assisted development
         </p>
         <div className="flex gap-4 justify-center pt-8">
           <a
