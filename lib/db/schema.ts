@@ -98,14 +98,67 @@ export const figmaFrames = pgTable('figma_frames', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 })
 
-// Flow connections table - manual connections between frames
+// Buttons table - detected interactive button elements
+export const buttons = pgTable('buttons', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  frameId: uuid('frame_id').references(() => figmaFrames.id, { onDelete: 'cascade' }).notNull(),
+  figmaNodeId: varchar('figma_node_id', { length: 50 }).notNull(),
+  name: text('name').notNull(),
+  label: text('label').notNull(),
+  type: varchar('type', { length: 20 }).notNull(), // primary, secondary, tertiary, text, icon, unknown
+  state: varchar('state', { length: 20 }).notNull(), // default, hover, pressed, disabled, unknown
+  x: integer('x').notNull(),
+  y: integer('y').notNull(),
+  width: integer('width').notNull(),
+  height: integer('height').notNull(),
+  componentId: varchar('component_id', { length: 50 }),
+  destinationFrameId: uuid('destination_frame_id').references(() => figmaFrames.id, { onDelete: 'set null' }),
+  destinationInteractionType: varchar('destination_interaction_type', { length: 20 }), // tap, hover, drag, key
+  confidence: integer('confidence').notNull(), // 0-100
+  detectionReasons: jsonb('detection_reasons').notNull(), // Array of strings
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+// Input fields table - detected form input elements
+export const inputFields = pgTable('input_fields', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
+  frameId: uuid('frame_id').references(() => figmaFrames.id, { onDelete: 'cascade' }).notNull(),
+  figmaNodeId: varchar('figma_node_id', { length: 50 }).notNull(),
+  name: text('name').notNull(),
+  type: varchar('type', { length: 20 }).notNull(), // text, email, password, number, search, textarea, unknown
+  placeholder: text('placeholder'),
+  label: text('label'),
+  required: boolean('required').default(false).notNull(),
+  x: integer('x').notNull(),
+  y: integer('y').notNull(),
+  width: integer('width').notNull(),
+  height: integer('height').notNull(),
+  state: varchar('state', { length: 20 }).notNull(), // default, focus, error, disabled
+  confidence: integer('confidence').notNull(), // 0-100
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+// Flow connections table - enhanced connection tracking between frames
 export const flowConnections = pgTable('flow_connections', {
   id: uuid('id').defaultRandom().primaryKey(),
   projectId: uuid('project_id').references(() => projects.id, { onDelete: 'cascade' }).notNull(),
   sourceFrameId: uuid('source_frame_id').references(() => figmaFrames.id, { onDelete: 'cascade' }).notNull(),
   targetFrameId: uuid('target_frame_id').references(() => figmaFrames.id, { onDelete: 'cascade' }).notNull(),
+  triggerElementId: varchar('trigger_element_id', { length: 50 }), // Button/element ID that triggers
+  connectionType: varchar('connection_type', { length: 20 }).notNull(), // prototype, semantic, manual
+  interactionType: varchar('interaction_type', { length: 20 }).notNull(), // tap, hover, drag, key, timer, other
+  transitionType: varchar('transition_type', { length: 20 }), // instant, dissolve, slide, push, move
+  duration: integer('duration'), // milliseconds
+  easing: text('easing'),
+  confirmed: boolean('confirmed').default(false).notNull(), // For semantic connections
+  confidence: integer('confidence'), // 0-100 for semantic connections
+  reasoning: text('reasoning'), // Explanation for semantic connections
   label: text('label'), // Optional label for the connection
+  metadata: jsonb('metadata'), // Additional connection metadata
   createdAt: timestamp('created_at').defaultNow().notNull(),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
 })
 
 // Export history table - tracks generated exports
@@ -210,6 +263,8 @@ export const figmaFramesRelations = relations(figmaFrames, ({ one, many }) => ({
   }),
   sourceConnections: many(flowConnections, { relationName: 'sourceFrame' }),
   targetConnections: many(flowConnections, { relationName: 'targetFrame' }),
+  buttons: many(buttons),
+  inputFields: many(inputFields),
 }))
 
 export const flowConnectionsRelations = relations(flowConnections, ({ one }) => ({
@@ -250,6 +305,32 @@ export const componentInstancesRelations = relations(componentInstances, ({ one 
   }),
 }))
 
+export const buttonsRelations = relations(buttons, ({ one }) => ({
+  project: one(projects, {
+    fields: [buttons.projectId],
+    references: [projects.id],
+  }),
+  frame: one(figmaFrames, {
+    fields: [buttons.frameId],
+    references: [figmaFrames.id],
+  }),
+  destinationFrame: one(figmaFrames, {
+    fields: [buttons.destinationFrameId],
+    references: [figmaFrames.id],
+  }),
+}))
+
+export const inputFieldsRelations = relations(inputFields, ({ one }) => ({
+  project: one(projects, {
+    fields: [inputFields.projectId],
+    references: [projects.id],
+  }),
+  frame: one(figmaFrames, {
+    fields: [inputFields.frameId],
+    references: [figmaFrames.id],
+  }),
+}))
+
 // Types
 export type User = typeof users.$inferSelect
 export type NewUser = typeof users.$inferInsert
@@ -283,3 +364,9 @@ export type NewComponent = typeof components.$inferInsert
 
 export type ComponentInstance = typeof componentInstances.$inferSelect
 export type NewComponentInstance = typeof componentInstances.$inferInsert
+
+export type Button = typeof buttons.$inferSelect
+export type NewButton = typeof buttons.$inferInsert
+
+export type InputField = typeof inputFields.$inferSelect
+export type NewInputField = typeof inputFields.$inferInsert
